@@ -1,9 +1,19 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   get_next_line.c                                    :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: jbadia <jbadia@student.42quebec.com>       +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2021/08/31 11:58:09 by jbadia            #+#    #+#             */
+/*   Updated: 2021/08/31 11:58:28 by jbadia           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
-
-//ft_strjoin ft_strnew ft_strlen
 
 char	*ft_strnew(int size)
 {
@@ -27,7 +37,7 @@ size_t ft_strlen(const char *str)
 	}
 	return (i);
 }
-char	*ft_strjoin(char const *s1, const char *s2)
+char	*ft_strjoin_gnl(char const *s1, const char *s2)
 {
 	char	*str;
 	int	i;
@@ -57,9 +67,6 @@ int	get_next_line(char **line)
 {
 	char 	*buff;
 	int		ret;
-	//int 	fd;
-
-	// fd = open("./test.txt", O_RDONLY);
 
 	ret = 0;
 	buff = (char *)malloc(sizeof(char) * 2);
@@ -74,7 +81,7 @@ int	get_next_line(char **line)
 			return (1);
 		}
 		buff[ret] = '\0';
-		*line = ft_strjoin(*line, buff);
+		*line = ft_strjoin_gnl(*line, buff);
 	}
 	free(buff);
 	return (0);
