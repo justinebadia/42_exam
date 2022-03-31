@@ -205,18 +205,15 @@ int	exec(char **cmd, char**env)
 	char **tmp = cmd;
 	 
 	if (!check_for_pipe(cmd))
-		exec_cmd(cmd, env);
+		return(exec_cmd(cmd, env));
 
 	fd_stdin = dup(STDIN_FILENO);
 	if (fd_stdin < 0)
 		return (write_error_fatal("error: fatal\n"));
 	while (tmp)
 	{
-		if (pipe(pipefd) < 0)
-			return (write_error_fatal("error: fatal\n"));
-		id = fork();
-		if (id < 0)
-			return (write_error_fatal("error: fatal\n"));
+		if (pipe(pipefd) < 0 || (id = fork()) < 0)
+			write_error_fatal("error: fatal\n");
 		if (id == 0)
 			exec_child(cmd, tmp, env, pipefd, fd_stdin);
 		else if (dup2(fd_stdin, pipefd[0]) < 0)
