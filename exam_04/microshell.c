@@ -217,10 +217,7 @@ int	exec(char **cmd, char**env)
 		if (id == 0)
 			exec_child(cmd, tmp, env, pipefd, fd_stdin);
 		else if (dup2(fd_stdin, pipefd[0]) < 0)
-		{
-			printf("dup2 \n");
-			return (write_error_fatal("error: fatal\n"));
-		}
+			write_error_fatal("error: fatal\n");
 		close(pipefd[0]);
 		close(pipefd[1]);
 		count++;
@@ -228,7 +225,10 @@ int	exec(char **cmd, char**env)
 	}
 	close(fd_stdin);
 	while (count >= 0)
+	{
 		waitpid(0, NULL, 0);
+		count--;
+	}
 	return (0);
 }
 
@@ -244,7 +244,6 @@ int	main (int argc, char **argv, char **env)
 	printf("ARGC %d\n", argc);
 	while (i < argc - 1)
 	{
-		printf("main %zu\n", i);
 		cmd = cmd_maker(argv);
 		if (cmd && !strcmp(cmd[0], "cd"))
 			builtin_cd(cmd);
