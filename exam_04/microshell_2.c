@@ -45,62 +45,16 @@ Ne fuitez pas de file descriptor!*/
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdbool.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 
-int	i = 0;
+#define READ 0
+#define WRITE 1
 
-void print_tab(char **tab)
-{
-	int j = 0;
-	printf("\n");
-	while (tab[j])
-	{
-		printf("cmd[%d] = %s \n",j, tab[j]);
-		j++;
-	}
-	printf("\n");
-}
+int	fd_stdin;
+int ret;
+int haspipe;
 
-size_t	get_size(char **argv, char *str)
-{
-	size_t j = 0;
-	if (!argv)
-		return (0);
-	while (argv[i])
-	{
-		if (!strcmp(argv[i], str))
-			return (j);
-		j++;
-		i++;
-	}
-	return(j);
-}
-
-char **cmd_maker(char **argv)
-{
-	size_t size = 0;
-	size_t len = 0;
-	char **cmd = NULL;
-	size_t	j = 0;
-
-	size = get_size(argv, ";");
-	if (size == 0)
-		return (NULL);	
-	cmd = malloc(sizeof(*cmd) * size + 1);
-	if (cmd == NULL)
-		return (NULL);
-	len = i - size;
-	while (j < size)
-	{
-		cmd[j] = argv[len];
-		j++;
-		len++;
-	}
-	cmd[j] = NULL;
-	// print_tab(cmd);
-	return (cmd);
-}
 
 void write_error(char *str)
 {
@@ -110,7 +64,7 @@ void write_error(char *str)
 		write(2, &str[j++], 1);
 }
 
-int write_error_fatal(char *str)
+void write_error_fatal(char *str)
 {
 	int j = 0;
 
@@ -127,171 +81,132 @@ int	cmd_size(char **cmd)
 	return (j);
 }
 
-int	builtin_cd (char **cmd)
+void	builtin_cd (char **cmd)
 {
-	char	c[200];
-	int	ch;
-//	printf("%d\n", cmd_size(cmd));
 	if (cmd_size(cmd) != 2)
 	{
 		write_error("error: cd: bad arguments\n");
-		return (-1);
+		ret = 1;	
+		return ;
 	}
-	ch = chdir(cmd[1]);
-	//printf("%s\n", getcwd(c, sizeof(c)));
-	if (ch == -1)
+	if (chdir(cmd[1]) == -1)
 	{
 		write_error("error: cd: cannot change directory to ");
 		write_error(cmd[1]);
 		write_error("\n");
-		return (-1);
+		ret = 1;	
+		return ;
 	}
-	else
-		return (0);
 }
 
-bool check_for_pipe(char **cmd)
+void open_pipe(int pipefd[2])
 {
-	int j = 0;
-	while (cmd[j])
+	if (haspipe)
 	{
-		if (!strcmp(cmd[j], "|"))
-			return (true);
-		j++;
+		if (close(pipefd[READ]) < 0)
+			write_error_fatal("error: fatal\n");
+		if (dup2(pipefd[WRITE], STDOUT_FILENO) < 0)
+			write_error_fatal("error: fatal\n");
+		if (close(pipefd[WRITE]) < 0)
+			write_error_fatal("error: fatal\n");
 	}
-	return (false);
 }
 
-int check_pipe_pos(char **cmd)
+void close_pipe(int pipefd[2])
 {
-	int j = 0;
-	if (!cmd)
-		return (0);
-	while (cmd[j])
+	if (haspipe)
 	{
-		if (!strcmp(cmd[j], "|"))
-			return (j);
-		j++;
+		if (dup2(pipefd[READ], STDIN_FILENO) < 0)
+			write_error_fatal("error: fatal\n");
+		if (close(pipefd[READ]) < 0)
+			write_error_fatal("error: fatal\n");
+		if (close(pipefd[WRITE]) < 0)
+			write_error_fatal("error: fatal\n");
 	}
-	return (0);
 }
 
-int	exec_cmd(char **cmd, char **env)
+void	execute(char **cmd, char **env)
 {
 	pid_t id;
+	int fdpipe[2];
 
-	id = fork();
-	if (id < 0)
-		write_error_fatal("error: fatal\n");
+	if (cmd && !strcmp(cmd[0], "cd"))
+			return (builtin_cd(cmd));
+	if (haspipe)
+		if (pipe(fdpipe) < 0 || (id = fork()) < 0)
+			write_error_fatal("error: fatal\n");
 	if (id == 0)
 	{
+		open_pipe(fdpipe);
 		if (execve(cmd[0], cmd, env) < 0)
 		{
 			write_error("error: cannot execute ");
 			write_error(cmd[0]);
 			write_error("\n");
+			exit (1);
 		}
 	}
-	waitpid(0, NULL, 0);
-	return (0);
+	else
+		close_pipe(fdpipe);
 }
 
-char **get_next_pipe(char **cmd)
+void exec_cmd(char **cmd, char **env)
 {
-	int j = 0;
-	if (!cmd)
-		return (NULL);
-	while (cmd[j])
+	int i = -1;
+	int start = 0;
+	int	count = 0;
+
+	while (cmd[i++])
 	{
-		if (!strcmp(cmd[j], "|"))
-			return (&cmd[j + 1]);
-		j++;
+		if (!strcmp(cmd[i], "|") || cmd[i + 1] == NULL)
+		{
+			haspipe = 0;
+			if (!strcmp(cmd[i], "|"))
+			{
+				haspipe = 1;
+				cmd[i] = NULL;
+			}
+			execute(cmd + start, env);
+			start = i + 1;
+			count++;
+		}
 	}
-	return (NULL);
+	while (count-- > 0)
+	{
+		waitpid(-1, 0, 0);
+	}
 }
 
-int	exec_child(char **cmd, char **tmp, char **env, int pipefd[2], int fd_stdin)
+void get_fd(void)
 {
+	int tmp;
 
+	tmp = dup(STDIN_FILENO);
 	if (dup2(fd_stdin, STDIN_FILENO) < 0)
 		write_error_fatal("error: fatal\n");
-	if (check_for_pipe(tmp) && dup2(pipefd[1], STDOUT_FILENO) < 0)
+	if (close(tmp) < 0)
 		write_error_fatal("error: fatal\n");
-	close(fd_stdin);
-	close(pipefd[0]);
-	close(pipefd[1]);
-	
-	//tmp[check_pipe_pos(tmp)] = NULL;
-	//printf("dans child TMP = \n");
-	//print_tab(tmp);
-	// print_tab(cmd);
-	exec_cmd(tmp, env);
-	free(cmd);
-	exit (0);
 }
 
-int	exec(char **cmd, char**env)
+int main(int argc, char **argv, char **env)
 {
-	int	pipefd[2];
-	int	fd_stdin;
-	pid_t id;
-	int count = 0;
-	char **tmp = cmd;
-	 
-	if (!check_for_pipe(cmd))
-	{
-		printf("test");
-		return(exec_cmd(cmd, env));
-	}
-	// printf("TMP = \n");
-	// print_tab(tmp);
-	fd_stdin = dup(STDIN_FILENO);
-	if (fd_stdin < 0)
-		return (write_error_fatal("error: fatal\n"));
-	while (tmp)
-	{
-		if (pipe(pipefd) < 0 || (id = fork()) < 0)
-			write_error_fatal("error: fatal\n");
-		if (id == 0)
-			exec_child(cmd, tmp, env, pipefd, fd_stdin);
-		else
-			if ((dup2(pipefd[0], fd_stdin) < 0))
-				write_error_fatal("error: fatal\n");
-		close(pipefd[0]);
-		close(pipefd[1]);
-		count++;
-		tmp = get_next_pipe(tmp);
-	}
-	close(fd_stdin);
-	while (count > 0)
-	{
-		waitpid(0, NULL, 0);
-		count--;
-	}
-	return (0);
-}
-
-
-int	main (int argc, char **argv, char **env)
-{
-	char **cmd;
-
-	cmd = NULL;
+	int	i = 0;
+	int start = 1;
+	fd_stdin = dup(STDIN_FILENO);	
 	if (argc < 2)
 		return (0);
-	argv++;
-	//printf("ARGC %d\n", argc);
-	while (i < argc - 1)
+	while (argv[i++])
 	{
-		cmd = cmd_maker(argv);
-		if (cmd && !strcmp(cmd[0], "cd"))
-			builtin_cd(cmd);
-		else if (cmd)
-			exec(cmd, env);
-		print_tab(cmd);
-		free(cmd);
-		cmd = NULL;
-		i++;
+		if (!strcmp(argv[i], ";") || argv[i + 1] == NULL)
+		{
+			if (!strcmp(argv[i], ";"))
+				argv[i] = NULL;
+			exec_cmd(argv + start, env);
+			start = i + 1;
+		}
+		ret = 0;
+		get_fd();
 	}
-	return (0);
+	return (ret);
 }
+
