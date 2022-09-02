@@ -14,14 +14,28 @@ SpellBook::SpellBook()
 
 SpellBook::~SpellBook()
 {
-
+	vector<ASpell*>::iterator it = book.begin();
+	vector<ASpell*>::iterator ite = book.end();
+	
+	for (; it != ite; it++)
+	{
+		delete *it;
+	}
+	book.clear();
 }
 
 void SpellBook::learnSpell(ASpell* spell)
 {
-	if (spell)
-		book.push_back(spell);
-	return;
+
+	vector<ASpell*>::iterator it = book.begin();
+	vector<ASpell*>::iterator ite = book.end();
+	
+	for (; it != ite; it++)
+	{
+		if ((*it)->getName() == spell_name)
+			return;
+	}
+	book.push_back(spell);
 }
 
 void SpellBook::forgetSpell(const string& spell_name)
@@ -34,7 +48,10 @@ void SpellBook::forgetSpell(const string& spell_name)
 	for (; it != ite; it++)
 	{
 		if ((*it)->getName() == spell_name)
+		{
+			delete *it;
 			book.erase(it);
+		}
 	}
 	return ;
 }
