@@ -36,7 +36,7 @@ void TargetGenerator::learnTargetType(ATarget* target)
 			if ((*it)->getType() == target_name)
 				return;
 		}
-		targen.push_back(target);
+		targen.push_back(target->clone());
 	}
 }
 

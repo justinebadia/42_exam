@@ -35,7 +35,7 @@ void SpellBook::learnSpell(ASpell* spell)
 		if ((*it)->getName() == spell_name)
 			return;
 	}
-	book.push_back(spell);
+	book.push_back(spell->clone());
 }
 
 void SpellBook::forgetSpell(const string& spell_name)
